@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest -v
+
+  windows-onedir-build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pyinstaller
+      - name: Build Windows onedir bundle (avoids onefile false positives)
+        run: |
+          pyinstaller --onedir --name procwatch src/procwatch/cli.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: procwatch-windows-onedir
+          path: dist/procwatch
