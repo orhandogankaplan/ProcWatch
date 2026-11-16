@@ -1,4 +1,4 @@
-"""Command-line interface and interactive menu for ProcWatch."""
+"""Command-line interface, interactive terminal menu, 3D widget, and GUI launcher."""
 
 from __future__ import annotations
 
@@ -8,16 +8,19 @@ from typing import Sequence
 
 from procwatch import __version__
 from procwatch.monitor import get_system_summary, list_processes
-from procwatch.profiles import DEFAULT_PROFILES, apply_profile, safe_terminate
+from procwatch.profiles import DEFAULT_PROFILES, apply_profile, clean_idle_ram, safe_terminate
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="procwatch",
-        description="Safe, user-scoped process monitor and resource optimizer.",
+        description="Safe, user-scoped process monitor, 3D CPU widget, and RAM cleaner.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    sub.add_parser("widget", help="Launch the floating 3D desktop CPU widget.")
+    sub.add_parser("gui", help="Launch the Tkinter desktop dashboard.")
+    sub.add_parser("menu", help="Launch the interactive terminal menu.")
     sub.add_parser("status", help="Show overall CPU and RAM usage.")
 
     top_p = sub.add_parser("top", help="List top resource-consuming user processes.")
@@ -31,6 +34,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="Actually apply priority changes (defaults to safe dry-run).",
+    )
+
+    clean_p = sub.add_parser("clean-ram", help="Preview or clean idle background RAM hogs.")
+    clean_p.add_argument("--min-mb", type=float, default=80.0)
+    clean_p.add_argument(
+        "--apply",
+        action="store_true",
+        help="Actually terminate idle background apps (defaults to dry-run).",
     )
 
     term_p = sub.add_parser("terminate", help="Safely terminate a user-owned process.")
@@ -79,7 +90,7 @@ def _prompt_profile() -> str | None:
 
 
 def interactive_menu() -> int:
-    """Keep console open with an interactive menu when launched without arguments."""
+    """Keep console open with an interactive menu when launched without GUI."""
     print(f"=== ProcWatch v{__version__} (Safe User-Scoped Mode) ===")
     while True:
         print("\nChoose an action:")
@@ -88,11 +99,12 @@ def interactive_menu() -> int:
         print("  3) Top 15 processes by CPU")
         print("  4) Preview optimization profile (dry-run)")
         print("  5) Apply optimization profile")
-        print("  6) Safely terminate a user process")
+        print("  6) Clean idle RAM (preview / apply)")
+        print("  7) Safely terminate a user process")
         print("  0) Exit")
 
         try:
-            choice = input("\nSelect [0-6]: ").strip()
+            choice = input("\nSelect [0-7]: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nExiting ProcWatch.")
             return 0
@@ -113,6 +125,18 @@ def interactive_menu() -> int:
             if profile:
                 _run_optimize(profile, dry_run=False)
         elif choice == "6":
+            items, est_mb = clean_idle_ram(dry_run=True)
+            if not items:
+                print("No idle background RAM hogs found.")
+                continue
+            for item in items:
+                print(f"[{item.pid}] {item.name}: {item.detail}")
+            confirm = input(f"Close {len(items)} idle app(s) to free ~{est_mb:.1f} MB? [y/N]: ").strip().lower()
+            if confirm == "y":
+                applied, freed_mb = clean_idle_ram(dry_run=False)
+                done = sum(1 for i in applied if i.applied)
+                print(f"Cleaned {done} app(s), freed ~{freed_mb:.1f} MB.")
+        elif choice == "7":
             target = input("Enter PID or process name (e.g. notepad.exe): ").strip()
             if not target:
                 print("Cancelled.")
@@ -127,16 +151,38 @@ def interactive_menu() -> int:
             print("Goodbye.")
             return 0
         else:
-            print("Invalid selection. Enter a number from 0 to 6.")
+            print("Invalid selection. Enter a number from 0 to 7.")
+
+
+def _launch_default_ui() -> int:
+    try:
+        from procwatch.widget3d import launch_widget_3d
+
+        return launch_widget_3d()
+    except Exception:
+        return interactive_menu()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     effective_argv = list(sys.argv[1:]) if argv is None else list(argv)
     if not effective_argv:
-        return interactive_menu()
+        return _launch_default_ui()
 
     parser = build_parser()
     args = parser.parse_args(effective_argv)
+
+    if args.command == "widget":
+        from procwatch.widget3d import launch_widget_3d
+
+        return launch_widget_3d()
+
+    if args.command == "gui":
+        from procwatch.gui import launch_gui
+
+        return launch_gui()
+
+    if args.command == "menu":
+        return interactive_menu()
 
     if args.command == "status":
         _print_status()
@@ -152,6 +198,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "optimize":
         _run_optimize(args.profile, dry_run=not args.apply)
+        return 0
+
+    if args.command == "clean-ram":
+        items, est_mb = clean_idle_ram(min_ram_mb=args.min_mb, dry_run=not args.apply)
+        if not items:
+            print("No idle background RAM hogs found.")
+            return 0
+        for item in items:
+            print(f"[{item.pid}] {item.name}: {item.detail}")
+        print(f"Total estimated RAM: {est_mb:.1f} MB")
         return 0
 
     if args.command == "terminate":

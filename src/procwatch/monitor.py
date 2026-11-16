@@ -33,10 +33,10 @@ class SystemSummary:
     process_count: int
 
 
-def get_system_summary() -> SystemSummary:
+def get_system_summary(interval: float = 0.0) -> SystemSummary:
     """Return a snapshot of overall CPU and memory usage."""
     vm = psutil.virtual_memory()
-    cpu = psutil.cpu_percent(interval=0.1)
+    cpu = psutil.cpu_percent(interval=interval)
     return SystemSummary(
         cpu_percent=round(cpu, 1),
         memory_total_gb=round(vm.total / (1024**3), 2),
@@ -54,6 +54,7 @@ def list_processes(
 ) -> List[ProcessInfo]:
     """List running processes sorted by memory or CPU usage."""
     current_user = get_current_username()
+    cpu_cores = psutil.cpu_count(logical=True) or 1
     results: List[ProcessInfo] = []
 
     attrs = ["pid", "name", "username", "cpu_percent", "memory_info", "memory_percent", "status"]
@@ -72,7 +73,8 @@ def list_processes(
             mem_info = info.get("memory_info")
             mem_mb = round(mem_info.rss / (1024**2), 1) if mem_info else 0.0
             mem_pct = round(float(info.get("memory_percent") or 0.0), 2)
-            cpu_pct = round(float(info.get("cpu_percent") or 0.0), 1)
+            raw_cpu = float(info.get("cpu_percent") or 0.0)
+            cpu_pct = round(min(100.0, raw_cpu / cpu_cores), 1)
 
             results.append(
                 ProcessInfo(

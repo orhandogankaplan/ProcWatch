@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from procwatch.cli import build_parser, main
 from procwatch.monitor import get_system_summary, list_processes
-from procwatch.profiles import apply_profile, safe_terminate
+from procwatch.profiles import apply_profile, clean_idle_ram, safe_terminate
 from procwatch.safety import is_owned_by_current_user, is_protected_process
 
 
@@ -82,6 +82,32 @@ def test_apply_profile_dry_run():
         proc.nice.assert_not_called()
 
 
+def test_clean_idle_ram_dry_run_and_apply():
+    idle_proc = MagicMock()
+    idle_proc.pid = 44444
+    idle_proc.info = {
+        "pid": 44444,
+        "name": "discord.exe",
+        "cpu_percent": 0.2,
+        "memory_info": SimpleNamespace(rss=250 * 1024 * 1024),
+    }
+    idle_proc.username.return_value = "orhan"
+
+    with patch("procwatch.profiles.get_current_username", return_value="orhan"), patch(
+        "procwatch.profiles.psutil.process_iter", return_value=[idle_proc]
+    ):
+        preview, est_mb = clean_idle_ram(min_ram_mb=80.0, dry_run=True)
+        assert len(preview) == 1
+        assert est_mb == 250.0
+        idle_proc.terminate.assert_not_called()
+
+        applied, freed_mb = clean_idle_ram(min_ram_mb=80.0, dry_run=False)
+        assert len(applied) == 1
+        assert applied[0].applied is True
+        assert freed_mb == 250.0
+        idle_proc.terminate.assert_called_once()
+
+
 def test_safe_terminate_blocks_protected():
     proc = MagicMock()
     proc.pid = 777
@@ -102,6 +128,11 @@ def test_cli_parser_and_status(capsys):
     args = parser.parse_args(["optimize", "--profile", "work"])
     assert args.profile == "work"
     assert args.apply is False
+
+    assert parser.parse_args(["widget"]).command == "widget"
+    assert parser.parse_args(["gui"]).command == "gui"
+    assert parser.parse_args(["menu"]).command == "menu"
+    assert parser.parse_args(["clean-ram"]).command == "clean-ram"
 
     rc = main(["status"])
     assert rc == 0
