@@ -26,9 +26,9 @@ jobs:
       - name: Run tests
         run: pytest -v
 
-      - name: Build Windows onedir bundle
+      - name: Build Windows windowed onedir bundle (no blank cmd window)
         run: |
-          pyinstaller --onedir --name procwatch src/procwatch/cli.py
+          pyinstaller --onedir --windowed --name procwatch src/procwatch/cli.py
           Copy-Item README.md dist/procwatch/README.md
 
       - name: Package zip and generate SHA-256 checksum

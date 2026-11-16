@@ -37,9 +37,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install . pyinstaller
-      - name: Build Windows onedir bundle (avoids onefile false positives)
+      - name: Build Windows windowed onedir bundle
         run: |
-          pyinstaller --onedir --name procwatch src/procwatch/cli.py
+          pyinstaller --onedir --windowed --name procwatch src/procwatch/cli.py
       - uses: actions/upload-artifact@v4
         with:
           name: procwatch-windows-onedir

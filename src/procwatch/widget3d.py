@@ -29,7 +29,6 @@ def _apply_win11_rounded_corners(win: tk.Tk | tk.Toplevel) -> None:
     try:
         win.update_idletasks()
         hwnd = ctypes.windll.user32.GetParent(win.winfo_id()) or win.winfo_id()
-        # DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2
         pref = ctypes.c_int(2)
         ctypes.windll.dwmapi.DwmSetWindowAttribute(
             hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref)
@@ -88,7 +87,6 @@ class CpuWidget3D:
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # CPU section
         self.canvas.create_text(
             18, 18, anchor=tk.W, text="CPU", fill="#94a3b8", font=("Segoe UI", 8, "bold")
         )
@@ -101,7 +99,6 @@ class CpuWidget3D:
         self._draw_pill_track(18, 59, 232, 65)
         self._cpu_bar = self._create_pill_fill(18, 59, 24, 65, _CPU_COLOR)
 
-        # RAM section
         self.canvas.create_text(
             18, 82, anchor=tk.W, text="RAM", fill="#94a3b8", font=("Segoe UI", 8, "bold")
         )
@@ -114,7 +111,6 @@ class CpuWidget3D:
         self._draw_pill_track(18, 123, 232, 129)
         self._ram_bar = self._create_pill_fill(18, 123, 24, 129, _RAM_COLOR)
 
-        # Subtle footer for Auto-Clean status
         self._footer = self.canvas.create_text(
             18, 141, anchor=tk.W, text="Auto-Clean: ON", fill="#475569", font=("Segoe UI", 7)
         )
@@ -220,7 +216,6 @@ class CpuWidget3D:
         )
         self._set_pill_fill(self._ram_bar, self.ram_pct, 123, 129)
 
-        # Auto-clean idle RAM every 30 seconds in background thread
         if self._auto_clean and (self._tick_count == 3 or self._tick_count % 30 == 0):
             self._trigger_clean_ram(silent_if_none=True)
 
@@ -258,10 +253,11 @@ class CpuWidget3D:
         if self.on_open_dashboard is not None:
             self.on_open_dashboard()
             return
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         if getattr(sys, "frozen", False):
-            subprocess.Popen([sys.executable, "gui"])
+            subprocess.Popen([sys.executable, "gui"], creationflags=flags)
         else:
-            subprocess.Popen([sys.executable, "-m", "procwatch.cli", "gui"])
+            subprocess.Popen([sys.executable, "-m", "procwatch.cli", "gui"], creationflags=flags)
 
     def close(self) -> None:
         self.win.destroy()
